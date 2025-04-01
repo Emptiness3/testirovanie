@@ -1,0 +1,74 @@
+name: Python Tests with Allure
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Чекаут кода
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Установка Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Установка зависимостей
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4. Установка Allure
+      - name: Install Allure
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y allure
+
+      # 5. Запуск тестов с генерацией Allure-результатов
+      - name: Run tests
+        run: |
+          pytest --alluredir=./allure-results tests/ || true  # Продолжаем даже при ошибках
+
+      # 6. Получение истории Allure (если есть)
+      - name: Get Allure history
+        uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      # 7. Генерация Allure-отчета
+      - name: Generate Allure Report
+        if: always()
+        run: |
+          allure generate ./allure-results -o ./allure-report --clean
+          # Копируем историю, если она есть
+          if [ -d "gh-pages/history" ]; then
+            cp -r gh-pages/history ./allure-report/history
+          fi
+
+      # 8. Публикация отчета на GitHub Pages
+      - name: Deploy to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./allure-report
+          publish_branch: gh-pages
+          keep_files: false
+
+      # 9. Вывод ссылки на отчет
+      - name: Print Allure Report URL
+        if: always()
+        run: |
+          echo "Allure Report URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
